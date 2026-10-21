@@ -1,0 +1,91 @@
+# ==========================================
+# STM32 / Embedded (C/C++) Exclusions
+# ==========================================
+
+# Toolchain / IDE Build-Ordner (CubeIDE, Keil, IAR, CMake)
+Debug/
+Release/
+build/
+bin/
+obj/
+
+# temporäre IDE-Konfigurationen & Projekt-Müll (CubeIDE / Eclipse)
+.settings/
+*.launch
+
+# Keil MDK / RealView Microcontroller Development Kit
+*.uvopt
+*.uvoptx
+*.uvgui.*
+*.uvproj.bak
+*.uvopt.bak
+*.dep
+LST/
+OBJ/
+
+# IAR Embedded Workbench
+*.ewt
+*.ewp.dep
+*.ewd.browse
+*.dep
+Backup of *
+
+# Binary / Firmware Build-Outputs (falls außerhalb von build/ generiert)
+*.elf
+*.bin
+*.hex
+*.map
+*.d
+*.o
+
+# STM32CubeMX Backup-Dateien & temporäre C-Sourcen
+*.bak
+*.orig
+
+# ==========================================
+# Python Exclusions
+# ==========================================
+
+# Bytecode & Cache-Ordner
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtuelle Umgebungen (Virtual Environments)
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook Checkpoints (falls verwendet)
+.ipynb_checkpoints/
+
+# Python Paketierung & Test-Outputs
+*.egg-info/
+.eggs/
+dist/
+.pytest_cache/
+.coverage
+
+# ==========================================
+# Allgemeine & System-Dateien
+# ==========================================
+
+# Umwelt- / Konfigurations-Variablen (Passwörter, COM-Ports, API-Keys)
+.env
+.env.local
+
+# Betriebssystem-Spezifisch
+.DS_Store
+Thumbs.db
+
+# Editor-spezifisch (VS Code / JetBrains / PyCharm)
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json
+.idea/
+*.swp
+*~
