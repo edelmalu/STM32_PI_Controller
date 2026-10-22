@@ -1,0 +1,73 @@
+{
+  "status": "completed",
+  "started_at_utc": "2026-10-21T15:16:57.911640+00:00",
+  "simulation_duration_s": 11.800751600065269,
+  "wall_clock_duration_s": 19.08537919993978,
+  "samples_written": 1200,
+  "configuration": {
+    "port": "COM6",
+    "baudrate": 115200,
+    "dt_s_fallback": 0.01,
+    "simulation_time_s": 12.0,
+    "requested_steps": 1200,
+    "system_core_clock_hz_for_dwt_conversion": 96000000,
+    "controller_gains": {
+      "kp": 0.08,
+      "ki": 2.5
+    },
+    "max_process_value": 1500.0,
+    "process_time_constant_s": 0.5,
+    "setpoint": 1200.0,
+    "disturbance": {
+      "mode": "off",
+      "start_s": 5.0,
+      "magnitude": 10.0,
+      "duration_s": null
+    }
+  },
+  "results": {
+    "samples_received": 1200,
+    "samples_requested": 1200,
+    "disturbance": {
+      "mode": "off",
+      "active": false,
+      "first_active_time_s": null
+    },
+    "regulation": {
+      "settling_time_s": 0.7599999583333334,
+      "tolerance_band": 24.0,
+      "maximum_value": 1203.1724471583868,
+      "overshoot": 3.172447158386831,
+      "overshoot_percent": 0.2643705965322359,
+      "steady_mean_last_2s": 1199.9908123744533,
+      "steady_error_last_2s": 0.009187625546701383,
+      "max_abs_deviation_first_1s_after_disturbance": null
+    },
+    "disturbance_response_first_1_5s": null,
+    "uart_telemetry": {
+      "receive_interval_mean_ms": 9.836771392812635,
+      "receive_interval_median_ms": 9.960700059309602,
+      "receive_interval_min_ms": 8.712599985301495,
+      "receive_interval_max_ms": 11.01569994352758,
+      "missed_timer_telegrams": 0,
+      "duplicate_timer_counts": 0,
+      "timer_tick_span": 1199,
+      "pc_observed_ms_per_timer_tick": 9.836771392812635
+    },
+    "timer_dwt": {
+      "interval_count": 1200,
+      "period_cycles_mean": 960000.0016666667,
+      "period_cycles_min": 959990,
+      "period_cycles_max": 960010,
+      "period_mean_ms": 10.000000017361112,
+      "expected_period_cycles": 960000.0,
+      "period_error_percent": 1.7361111531499773e-07
+    }
+  },
+  "files": {
+    "measurements": "measurements.csv",
+    "run_data": "run.json",
+    "plot": "plot.png"
+  },
+  "finished_at_utc": "2026-10-21T15:17:16.998245+00:00"
+}

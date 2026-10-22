@@ -1,0 +1,78 @@
+{
+  "status": "completed",
+  "started_at_utc": "2026-10-22T15:00:25.091011+00:00",
+  "simulation_duration_s": 11.816104000085033,
+  "wall_clock_duration_s": 19.215869200066663,
+  "samples_written": 1200,
+  "configuration": {
+    "port": "COM6",
+    "baudrate": 115200,
+    "dt_s_fallback": 0.01,
+    "simulation_time_s": 12.0,
+    "requested_steps": 1200,
+    "system_core_clock_hz_for_dwt_conversion": 96000000,
+    "controller_gains": {
+      "kp": 0.16,
+      "ki": 5.0
+    },
+    "max_process_value": 1500.0,
+    "process_time_constant_s": 0.5,
+    "setpoint": 1200.0,
+    "disturbance": {
+      "mode": "pulse",
+      "start_s": 5.0,
+      "magnitude": 200.0,
+      "duration_s": 0.1
+    }
+  },
+  "results": {
+    "samples_received": 1200,
+    "samples_requested": 1200,
+    "disturbance": {
+      "mode": "pulse",
+      "active": true,
+      "first_active_time_s": 5.009999937499964
+    },
+    "regulation": {
+      "settling_time_s": 0.7600000208333335,
+      "tolerance_band": 24.0,
+      "maximum_value": 1205.8884407305695,
+      "overshoot": 5.888440730569528,
+      "overshoot_percent": 0.4907033942141273,
+      "steady_mean_last_2s": 1197.1346732442184,
+      "steady_error_last_2s": 2.8653267557815525,
+      "max_abs_deviation_first_1s_after_disturbance": 16.367616257255122
+    },
+    "disturbance_response_first_1_5s": {
+      "measurement_min": 1183.4986252706065,
+      "measurement_max": 1205.8884407305695,
+      "controller_output_u_min": 0.0576,
+      "controller_output_u_max": 1.0
+    },
+    "uart_telemetry": {
+      "receive_interval_mean_ms": 9.848387989979097,
+      "receive_interval_median_ms": 9.96359996497631,
+      "receive_interval_min_ms": 8.643300039693713,
+      "receive_interval_max_ms": 11.319899931550026,
+      "missed_timer_telegrams": 0,
+      "duplicate_timer_counts": 0,
+      "timer_tick_span": 1199,
+      "pc_observed_ms_per_timer_tick": 9.848387989979097
+    },
+    "timer_dwt": {
+      "interval_count": 1200,
+      "period_cycles_mean": 959999.995,
+      "period_cycles_min": 959990,
+      "period_cycles_max": 960010,
+      "period_mean_ms": 9.999999947916667,
+      "expected_period_cycles": 960000.0,
+      "period_error_percent": -5.208333338183972e-07
+    }
+  },
+  "files": {
+    "measurements": "measurements.csv",
+    "run_data": "run.json",
+    "plot": "plot.png"
+  },
+  "finished_at_utc": "2026-10-22T15:00:44.308453+00:00"
+}

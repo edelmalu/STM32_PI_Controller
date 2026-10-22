@@ -62,7 +62,7 @@ volatile float control_output = 0.0f;
 static volatile uint32_t timer_period_cycles = 0;
 
 static float kp = 0.08f;
-static float ki = 3.75f;
+static float ki = 5.0f;
 static float integral = 0.0f;
 
 static volatile uint8_t control_tick = 0;
@@ -213,11 +213,42 @@ int main(void)
                        speed_setpoint_rpm);
               send_response = 1;
           }
-          else if (sscanf(local_buffer, "MEAS,%f", &speed_measured_rpm) == 1)
+          else
+          {
+              float new_kp;
+              float new_ki;
+
+              if (sscanf(local_buffer, "SET_PI,%f,%f", &new_kp, &new_ki) == 2)
+              {
+                  if (new_kp >= 0.0f && new_kp <= 1000.0f &&
+                      new_ki >= 0.0f && new_ki <= 1000.0f)
+                  {
+                      __disable_irq();
+                      kp = new_kp;
+                      ki = new_ki;
+                      integral = 0.0f;
+                      __enable_irq();
+
+                      snprintf(response, sizeof(response),
+                               "OK,SET_PI,%.6f,%.6f\r\n",
+                               (double)kp,
+                               (double)ki);
+                  }
+                  else
+                  {
+                      snprintf(response, sizeof(response),
+                               "ERR,SET_PI_RANGE\r\n");
+                  }
+                  send_response = 1;
+              }
+          }
+
+          if (!send_response &&
+              sscanf(local_buffer, "MEAS,%f", &speed_measured_rpm) == 1)
           {
               /* The new measurement is used by the next timer-driven update. */
           }
-          else
+          else if (!send_response)
           {
               snprintf(response, sizeof(response),
                        "ERR,UNKNOWN_COMMAND\r\n");

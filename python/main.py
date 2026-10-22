@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import statistics
 import time
 from datetime import datetime, timezone
@@ -16,17 +17,19 @@ DT = 0.01
 SIMULATION_TIME = 12.0
 SIMULATION_STEPS = round(SIMULATION_TIME / DT)
 SYSTEM_CORE_CLOCK_HZ = 96_000_000
+DEFAULT_KP = 0.08
+DEFAULT_KI = 5.0
 
 MAX_RPM = 1500.0
 PROCESS_TIME_CONSTANT = 0.5
 SETPOINT_RPM = 1200.0
 
 DISTURBANCE_TIME = 5.0
-DISTURBANCE_RPM = 200.0
-DISTURBANCE_MODE = "pulse"  # "pulse" oder "persistent"
+DISTURBANCE_MODE = "pulse"  # "off", "pulse" oder "persistent"
 DISTURBANCE_DURATION = 0.1  # Wird nur im pulse-Modus verwendet
+DISTURBANCE_LEVELS = (200.0, 100.0, 50.0, 25.0, 10.0)
 
-RESULTS_DIRECTORY = Path(__file__).resolve().parent / "results"
+RESULTS_DIRECTORY = Path(__file__).resolve().parent / "results/integral/10.0"
 
 
 def save_run_metadata(path, metadata):
@@ -37,7 +40,16 @@ def save_run_metadata(path, metadata):
 
 
 def set_speed_and_wait_for_ack(stm32, setpoint, timeout_s=5.0):
-    stm32.write(f"SET_SPEED,{setpoint:.1f}\n".encode("ascii"))
+    return send_command_and_wait_for_ack(
+        stm32,
+        f"SET_SPEED,{setpoint:.1f}",
+        "OK,SET_SPEED,",
+        timeout_s,
+    )
+
+
+def send_command_and_wait_for_ack(stm32, command, expected_prefix, timeout_s=5.0):
+    stm32.write(f"{command}\n".encode("ascii"))
     deadline = time.monotonic() + timeout_s
     discarded_lines = 0
     last_response = ""
@@ -48,10 +60,10 @@ def set_speed_and_wait_for_ack(stm32, setpoint, timeout_s=5.0):
         ).strip()
         if not response:
             continue
-        if response.startswith("OK,SET_SPEED,"):
+        if response.startswith(expected_prefix):
             return response
         if response.startswith("ERR,"):
-            raise RuntimeError(f"STM32 hat den Sollwert abgelehnt: {response}")
+            raise RuntimeError(f"STM32 hat den Befehl abgelehnt: {response}")
 
         # Nach dem Reset kann zuerst eine mitten im UART-Telegramm beginnende
         # Zeile eintreffen; außerdem sendet die Firmware regelmäßig Timerdaten.
@@ -59,14 +71,23 @@ def set_speed_and_wait_for_ack(stm32, setpoint, timeout_s=5.0):
         last_response = response
 
     raise TimeoutError(
-        "Keine Sollwertbestätigung vom STM32 innerhalb von "
+        f"Keine Bestätigung für {command!r} vom STM32 innerhalb von "
         f"{timeout_s:.1f} s. Verworfen: {discarded_lines} Zeilen; "
         f"letzte Zeile: {last_response!r}"
     )
 
 
+def prompt_gain(name, default):
+    raw_value = input(f"{name} [{default:g}, 0 bis 1000]: ").strip()
+    value = default if not raw_value else float(raw_value)
+    if not math.isfinite(value) or not 0.0 <= value <= 1000.0:
+        raise ValueError(f"{name} muss zwischen 0 und 1000 liegen")
+    return value
+
+
 def create_plot(run_directory, times, setpoints, measurements,
-                load_disturbances, control_outputs):
+                load_disturbances, control_outputs, disturbance_mode,
+                disturbance_duration):
     """Erzeugt den Plot und speichert ihn im Ergebnisordner dieses Laufs."""
     figure, (ax_values, ax_zoom, ax_disturbance) = plt.subplots(
         3,
@@ -125,19 +146,21 @@ def create_plot(run_directory, times, setpoints, measurements,
     ax_zoom.set_title("Vergrößerung um den Störzeitpunkt")
     ax_zoom.grid(True)
 
+    disturbance_label = {
+        "off": "Keine Laststörung",
+        "pulse": f"Laststörimpuls ({disturbance_duration:g} s)",
+        "persistent": "Dauerhafte Laststörung",
+    }[disturbance_mode]
     ax_disturbance.step(
         times,
         load_disturbances,
         where="post",
-        label=(
-            "Dauerhafte Laststörung"
-            if DISTURBANCE_MODE == "persistent"
-            else f"Laststörimpuls ({DISTURBANCE_DURATION:g} s)"
-        ),
+        label=disturbance_label,
         color="tab:green",
         linewidth=2,
     )
-    ax_disturbance.axvline(DISTURBANCE_TIME, color="red", linestyle=":")
+    if disturbance_mode != "off":
+        ax_disturbance.axvline(DISTURBANCE_TIME, color="red", linestyle=":")
     ax_disturbance.set_xlabel("Simulationszeit [s]")
     ax_disturbance.set_ylabel("Störwert")
     ax_disturbance.grid(True)
@@ -146,13 +169,35 @@ def create_plot(run_directory, times, setpoints, measurements,
 
     plot_path = run_directory / "plot.png"
     figure.savefig(plot_path, dpi=150)
-    plt.show()
     plt.close(figure)
     return plot_path
 
 
 def print_run_summary(times, measurements, receive_times, timer_counts,
-                      timer_period_cycles, control_outputs, load_disturbances):
+                      timer_period_cycles, control_outputs, load_disturbances,
+                      disturbance_mode):
+    summary = {
+        "samples_received": len(measurements),
+        "samples_requested": SIMULATION_STEPS,
+        "disturbance": {
+            "mode": disturbance_mode,
+            "active": False,
+            "first_active_time_s": None,
+        },
+        "regulation": {
+            "settling_time_s": None,
+            "tolerance_band": 0.02 * SETPOINT_RPM,
+            "maximum_value": None,
+            "overshoot": None,
+            "overshoot_percent": None,
+            "steady_mean_last_2s": None,
+            "steady_error_last_2s": None,
+            "max_abs_deviation_first_1s_after_disturbance": None,
+        },
+        "disturbance_response_first_1_5s": None,
+        "uart_telemetry": None,
+        "timer_dwt": None,
+    }
     print(f"\nEmpfangene Simulationsschritte: {len(measurements)} / {SIMULATION_STEPS}")
 
     active_disturbance_times = [
@@ -161,10 +206,12 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
         if disturbance != 0.0
     ]
     if active_disturbance_times:
+        summary["disturbance"]["active"] = True
+        summary["disturbance"]["first_active_time_s"] = active_disturbance_times[0]
         print(
             f"Laststörung erstmals aktiv bei "
             f"{active_disturbance_times[0]:.3f} s "
-            f"(Modus: {DISTURBANCE_MODE}, Start: {DISTURBANCE_TIME:.3f} s)"
+            f"(Modus: {disturbance_mode}, Start: {DISTURBANCE_TIME:.3f} s)"
         )
         response_indices = [
             i for i, sample_time in enumerate(times)
@@ -173,6 +220,12 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
         if response_indices:
             response_values = [measurements[i] for i in response_indices]
             response_outputs = [control_outputs[i] for i in response_indices]
+            summary["disturbance_response_first_1_5s"] = {
+                "measurement_min": min(response_values),
+                "measurement_max": max(response_values),
+                "controller_output_u_min": min(response_outputs),
+                "controller_output_u_max": max(response_outputs),
+            }
             print(
                 f"Istwert nach Störung: min {min(response_values):.2f}, "
                 f"max {max(response_values):.2f}; "
@@ -214,6 +267,16 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
         ]
         steady_mean = sum(steady_values) / len(steady_values)
         steady_error = SETPOINT_RPM - steady_mean
+        summary["regulation"].update(
+            {
+                "settling_time_s": settling_time,
+                "maximum_value": max_value,
+                "overshoot": overshoot,
+                "overshoot_percent": overshoot_percent,
+                "steady_mean_last_2s": steady_mean,
+                "steady_error_last_2s": steady_error,
+            }
+        )
 
         if settling_time is not None:
             print(f"Einschwingzeit (+/- 2 %): {settling_time:.2f} s")
@@ -225,19 +288,23 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
         print(f"Mittlerer Wert am Ende: {steady_mean:.1f}")
         print(f"Stationäre Regelabweichung: {steady_error:.1f}")
 
-        disturbance_window = [
-            value
-            for sample_time, value in zip(times, measurements)
-            if DISTURBANCE_TIME <= sample_time <= DISTURBANCE_TIME + 1.0
-        ]
-        if disturbance_window:
-            max_abs_deviation = max(
-                abs(value - SETPOINT_RPM) for value in disturbance_window
-            )
-            print(
-                f"Größte Abweichung vom Sollwert in der ersten Sekunde "
-                f"nach Störung: {max_abs_deviation:.2f}"
-            )
+        if active_disturbance_times:
+            disturbance_window = [
+                value
+                for sample_time, value in zip(times, measurements)
+                if DISTURBANCE_TIME <= sample_time <= DISTURBANCE_TIME + 1.0
+            ]
+            if disturbance_window:
+                max_abs_deviation = max(
+                    abs(value - SETPOINT_RPM) for value in disturbance_window
+                )
+                summary["regulation"][
+                    "max_abs_deviation_first_1s_after_disturbance"
+                ] = max_abs_deviation
+                print(
+                    f"Größte Abweichung vom Sollwert in der ersten Sekunde "
+                    f"nach Störung: {max_abs_deviation:.2f}"
+                )
 
     if len(receive_times) > 1:
         receive_intervals_ms = [
@@ -252,6 +319,20 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
         duplicate_counts = sum(delta == 0 for delta in tick_deltas)
         timer_tick_span = (timer_counts[-1] - timer_counts[0]) & 0xFFFFFFFF
         observed_span = receive_times[-1] - receive_times[0]
+        summary["uart_telemetry"] = {
+            "receive_interval_mean_ms": statistics.mean(receive_intervals_ms),
+            "receive_interval_median_ms": statistics.median(receive_intervals_ms),
+            "receive_interval_min_ms": min(receive_intervals_ms),
+            "receive_interval_max_ms": max(receive_intervals_ms),
+            "missed_timer_telegrams": missed_ticks,
+            "duplicate_timer_counts": duplicate_counts,
+            "timer_tick_span": timer_tick_span,
+            "pc_observed_ms_per_timer_tick": (
+                observed_span * 1000 / timer_tick_span
+                if timer_tick_span > 0
+                else None
+            ),
+        }
 
         print("\n--- UART-Telemetrie am PC (nicht die reine TIM2-Zeit) ---")
         print(
@@ -276,6 +357,15 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
                 / expected_period_cycles
                 * 100
             )
+            summary["timer_dwt"] = {
+                "interval_count": len(measured_periods),
+                "period_cycles_mean": mean_period_cycles,
+                "period_cycles_min": min(measured_periods),
+                "period_cycles_max": max(measured_periods),
+                "period_mean_ms": mean_period_ms,
+                "expected_period_cycles": expected_period_cycles,
+                "period_error_percent": period_error_percent,
+            }
             print("\n--- TIM2-Intervall im STM32 (DWT CPU-Zyklen) ---")
             print(f"Erfasste Intervalle: {len(measured_periods)}")
             print(
@@ -304,50 +394,56 @@ def print_run_summary(times, measurements, receive_times, timer_counts,
                 f"Empfangsabstand pro TIM2-Tick laut PC-Uhr: "
                 f"{measured_tick_ms:.3f} ms"
             )
+    return summary
 
 
-def main():
-    if DISTURBANCE_MODE not in ("pulse", "persistent"):
-        raise ValueError(
-            "DISTURBANCE_MODE muss 'pulse' oder 'persistent' sein"
-        )
-
-    # Jeder Lauf erhält einen eigenen Ordner für Messdaten, Einstellungen und Plot.
-    run_started_at = datetime.now(timezone.utc)
-    run_id = run_started_at.astimezone().strftime("%Y%m%d_%H%M%S_%f")
-    run_directory = RESULTS_DIRECTORY / run_id
+def run_simulation(run_directory, kp_value, ki_value, disturbance_mode,
+                   disturbance_rpm):
     run_directory.mkdir(parents=True, exist_ok=False)
+    run_started_at = datetime.now(timezone.utc)
 
     csv_path = run_directory / "measurements.csv"
-    metadata_path = run_directory / "config.json"
+    run_data_path = run_directory / "run.json"
     plot_path = run_directory / "plot.png"
-    metadata = {
+    run_data = {
         "status": "running",
         "started_at_utc": run_started_at.isoformat(),
-        "port": PORT,
-        "baudrate": BAUDRATE,
-        "dt_s_fallback": DT,
-        "simulation_time_s": SIMULATION_TIME,
-        "requested_steps": SIMULATION_STEPS,
-        "system_core_clock_hz_for_dwt_conversion": SYSTEM_CORE_CLOCK_HZ,
-        "max_process_value": MAX_RPM,
-        "process_time_constant_s": PROCESS_TIME_CONSTANT,
-        "setpoint": SETPOINT_RPM,
-        "disturbance": {
-            "mode": DISTURBANCE_MODE,
-            "start_s": DISTURBANCE_TIME,
-            "magnitude": DISTURBANCE_RPM,
-            "duration_s": (
-                DISTURBANCE_DURATION if DISTURBANCE_MODE == "pulse" else None
-            ),
+        "simulation_duration_s": None,
+        "wall_clock_duration_s": None,
+        "samples_written": 0,
+        "configuration": {
+            "port": PORT,
+            "baudrate": BAUDRATE,
+            "dt_s_fallback": DT,
+            "simulation_time_s": SIMULATION_TIME,
+            "requested_steps": SIMULATION_STEPS,
+            "system_core_clock_hz_for_dwt_conversion": SYSTEM_CORE_CLOCK_HZ,
+            "controller_gains": {
+                "kp": kp_value,
+                "ki": ki_value,
+            },
+            "max_process_value": MAX_RPM,
+            "process_time_constant_s": PROCESS_TIME_CONSTANT,
+            "setpoint": SETPOINT_RPM,
+            "disturbance": {
+                "mode": disturbance_mode,
+                "start_s": DISTURBANCE_TIME,
+                "magnitude": disturbance_rpm,
+                "duration_s": (
+                    DISTURBANCE_DURATION
+                    if disturbance_mode == "pulse"
+                    else None
+                ),
+            },
         },
+        "results": None,
         "files": {
             "measurements": csv_path.name,
-            "configuration": metadata_path.name,
+            "run_data": run_data_path.name,
             "plot": plot_path.name,
         },
     }
-    save_run_metadata(metadata_path, metadata)
+    save_run_metadata(run_data_path, run_data)
 
     measured_value = 0.0
     times = []
@@ -373,6 +469,13 @@ def main():
                 ).strip()
 
             # Vor der Bestätigung können noch alte oder angeschnittene Timerzeilen ankommen.
+            response = send_command_and_wait_for_ack(
+                stm32,
+                f"SET_PI,{kp_value:.6f},{ki_value:.6f}",
+                "OK,SET_PI,",
+            )
+            print("STM32:", response)
+
             response = set_speed_and_wait_for_ack(stm32, SETPOINT_RPM)
             print("STM32:", response)
 
@@ -434,16 +537,17 @@ def main():
                     simulation_elapsed += step_dt
 
                     disturbance_is_active = (
-                        simulation_elapsed >= DISTURBANCE_TIME
+                        disturbance_mode != "off"
+                        and simulation_elapsed >= DISTURBANCE_TIME
                     )
-                    if DISTURBANCE_MODE == "pulse":
+                    if disturbance_mode == "pulse":
                         disturbance_is_active = (
                             disturbance_is_active
                             and simulation_elapsed
                             < DISTURBANCE_TIME + DISTURBANCE_DURATION
                         )
                     load_disturbance = (
-                        DISTURBANCE_RPM if disturbance_is_active else 0.0
+                        disturbance_rpm if disturbance_is_active else 0.0
                     )
 
                     # u ist normiert; MAX_RPM skaliert ihn auf den virtuellen Prozesswert.
@@ -490,7 +594,7 @@ def main():
                     csv_file.flush()
 
         actual_duration = time.monotonic() - start
-        metadata["simulation_duration_s"] = actual_duration
+        run_data["simulation_duration_s"] = actual_duration
         print(f"\nTatsächliche Simulationsdauer: {actual_duration:.3f} s")
 
         create_plot(
@@ -500,8 +604,10 @@ def main():
             measurements,
             load_disturbances,
             control_outputs,
+            disturbance_mode,
+            DISTURBANCE_DURATION,
         )
-        print_run_summary(
+        summary = print_run_summary(
             times,
             measurements,
             receive_times,
@@ -509,23 +615,64 @@ def main():
             timer_period_cycles,
             control_outputs,
             load_disturbances,
+            disturbance_mode,
         )
-        print(f"\nLaufdateien gespeichert unter: {run_directory}")
+        run_data["results"] = summary
+        run_data["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        save_run_metadata(run_data_path, run_data)
+        print(f"\nLaufdaten und Zusammenfassung gespeichert: {run_data_path}")
+        print(f"Alle Laufdateien gespeichert unter: {run_directory}")
 
-        metadata["status"] = "completed"
+        run_data["status"] = "completed"
     except Exception as error:
-        metadata["status"] = "failed"
-        metadata["error"] = f"{type(error).__name__}: {error}"
+        run_data["status"] = "failed"
+        run_data["error"] = f"{type(error).__name__}: {error}"
         raise
     finally:
-        if metadata["status"] == "running":
-            metadata["status"] = "interrupted"
-        metadata["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
-        metadata["wall_clock_duration_s"] = (
+        if run_data["status"] == "running":
+            run_data["status"] = "interrupted"
+        run_data["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        run_data["wall_clock_duration_s"] = (
             time.monotonic() - run_started_monotonic
         )
-        metadata["samples_written"] = len(measurements)
-        save_run_metadata(metadata_path, metadata)
+        run_data["samples_written"] = len(measurements)
+        save_run_metadata(run_data_path, run_data)
+
+
+def main():
+    if DISTURBANCE_MODE not in ("off", "pulse", "persistent"):
+        raise ValueError(
+            "DISTURBANCE_MODE muss 'off', 'pulse' oder 'persistent' sein"
+        )
+
+    print("PI-Reglerparameter eingeben (Enter übernimmt den Standardwert).")
+    kp_value = prompt_gain("kp", DEFAULT_KP)
+    ki_value = prompt_gain("ki", DEFAULT_KI)
+
+    batch_started_at = datetime.now().astimezone()
+    batch_id = batch_started_at.strftime("%Y%m%d_%H%M%S_%f")
+    batch_directory = RESULTS_DIRECTORY / f"batch_{batch_id}"
+    batch_directory.mkdir(parents=True, exist_ok=False)
+
+    print(
+        f"\nStarte Versuchsreihe: Modus={DISTURBANCE_MODE}, "
+        f"kp={kp_value:g}, ki={ki_value:g}"
+    )
+    for index, disturbance_rpm in enumerate(DISTURBANCE_LEVELS, start=1):
+        run_name = f"{DISTURBANCE_MODE}_{disturbance_rpm:g}"
+        run_directory = batch_directory / run_name
+        print(
+            f"\n=== Lauf {run_name} ({index}/{len(DISTURBANCE_LEVELS)}) ==="
+        )
+        run_simulation(
+            run_directory,
+            kp_value,
+            ki_value,
+            DISTURBANCE_MODE,
+            disturbance_rpm,
+        )
+
+    print(f"\nVersuchsreihe abgeschlossen: {batch_directory}")
 
 
 # Beim Import werden nur Konfiguration und Funktionen geladen, nicht der COM-Port geöffnet.

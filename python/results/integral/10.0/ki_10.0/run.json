@@ -1,0 +1,73 @@
+{
+  "status": "completed",
+  "started_at_utc": "2026-10-21T15:17:38.040526+00:00",
+  "simulation_duration_s": 11.799796000006609,
+  "wall_clock_duration_s": 30.182460199925117,
+  "samples_written": 1200,
+  "configuration": {
+    "port": "COM6",
+    "baudrate": 115200,
+    "dt_s_fallback": 0.01,
+    "simulation_time_s": 12.0,
+    "requested_steps": 1200,
+    "system_core_clock_hz_for_dwt_conversion": 96000000,
+    "controller_gains": {
+      "kp": 0.08,
+      "ki": 10.0
+    },
+    "max_process_value": 1500.0,
+    "process_time_constant_s": 0.5,
+    "setpoint": 1200.0,
+    "disturbance": {
+      "mode": "off",
+      "start_s": 5.0,
+      "magnitude": 10.0,
+      "duration_s": null
+    }
+  },
+  "results": {
+    "samples_received": 1200,
+    "samples_requested": 1200,
+    "disturbance": {
+      "mode": "off",
+      "active": false,
+      "first_active_time_s": null
+    },
+    "regulation": {
+      "settling_time_s": 0.7600000208333335,
+      "tolerance_band": 24.0,
+      "maximum_value": 1205.643530274392,
+      "overshoot": 5.643530274392106,
+      "overshoot_percent": 0.4702941895326755,
+      "steady_mean_last_2s": 1198.9049615699794,
+      "steady_error_last_2s": 1.0950384300206224,
+      "max_abs_deviation_first_1s_after_disturbance": null
+    },
+    "disturbance_response_first_1_5s": null,
+    "uart_telemetry": {
+      "receive_interval_mean_ms": 9.834302668914113,
+      "receive_interval_median_ms": 9.956699912436306,
+      "receive_interval_min_ms": 8.934399927966297,
+      "receive_interval_max_ms": 11.027999920770526,
+      "missed_timer_telegrams": 0,
+      "duplicate_timer_counts": 0,
+      "timer_tick_span": 1199,
+      "pc_observed_ms_per_timer_tick": 9.834302668914113
+    },
+    "timer_dwt": {
+      "interval_count": 1200,
+      "period_cycles_mean": 960000,
+      "period_cycles_min": 959990,
+      "period_cycles_max": 960010,
+      "period_mean_ms": 10.0,
+      "expected_period_cycles": 960000.0,
+      "period_error_percent": 0.0
+    }
+  },
+  "files": {
+    "measurements": "measurements.csv",
+    "run_data": "run.json",
+    "plot": "plot.png"
+  },
+  "finished_at_utc": "2026-10-21T15:18:08.224162+00:00"
+}
