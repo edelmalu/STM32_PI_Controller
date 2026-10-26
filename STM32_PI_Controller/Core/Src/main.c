@@ -90,13 +90,13 @@ static float PI_Controller(float setpoint, float measured, float dt)
 {
     float error = setpoint - measured;
 
-    // 1. Proportionalanteil
+    // Proportionalanteil des Reglers
     float proportional = kp * error;
 
-    // 2. Unbegrenzten Reglerausgang berechnen
+    // Unbegrenzte Stellgröße vor Anwendung der Ausgangsgrenzen
     float u_unconstrained = proportional + integral;
 
-    // 3. Stellgrößen-Begrenzung (Aktor-Limits: 0.0 bis 1.0)
+    // Stellgrößenbegrenzung auf den Bereich 0.0 bis 1.0
     float u_constrained = u_unconstrained;
     if (u_constrained > 1.0f) {
         u_constrained = 1.0f;
@@ -104,17 +104,16 @@ static float PI_Controller(float setpoint, float measured, float dt)
         u_constrained = 0.0f;
     }
 
-    // 4. Back-Calculation Anti-Windup für den Integrator
-    // Wenn der Regler in der Sättigung ist (Aktor am Anschlag), wird der
-    // Integrator über eine Rückkopplung aktiv "zurückgehalten", damit er nicht windupt.
-    // Koeffizient Tt (Tracking Time Constant) bestimmt, wie schnell sich der Integrator löst.
-    float tracking_gain = 5.0f; // Passt die Rückstellgeschwindigkeit an
+    // Back-Calculation korrigiert den Integrator anhand der Differenz
+    // zwischen begrenzter und unbegrenzter Stellgröße.
+    // tracking_gain entspricht 1/Tt, wobei Tt die Tracking-Zeitkonstante ist.
+    float tracking_gain = 5.0f;
     float saturation_error = u_constrained - u_unconstrained;
 
-    // 5. Integralanteil mit Fehler und Anti-Windup-Korrektur aktualisieren
+    // Integrator mit Fehleranteil und Back-Calculation-Korrektur aktualisieren
     integral += (ki * error + tracking_gain * saturation_error) * dt;
 
-    // Absolute Sicherheitssperre für den Integrator
+    // Integrator auf den Bereich 0.0 bis 1.0 begrenzen
     if (integral > 1.0f) integral = 1.0f;
     if (integral < 0.0f) integral = 0.0f;
 
@@ -200,7 +199,7 @@ int main(void)
           char local_buffer[96];
           uint8_t send_response = 0;
 
-          // UART-Puffer sicher kopieren
+          // Empfangene UART-Zeile im kritischen Abschnitt lokal kopieren.
           __disable_irq();
           strcpy(local_buffer, uart_rx_buffer);
           uart_line_ready = 0;
@@ -246,7 +245,7 @@ int main(void)
           if (!send_response &&
               sscanf(local_buffer, "MEAS,%f", &speed_measured_rpm) == 1)
           {
-              /* The new measurement is used by the next timer-driven update. */
+              /* The measurement is read by the next timer-driven controller update. */
           }
           else if (!send_response)
           {
@@ -498,7 +497,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             }
         }
 
-        /* Only re-arm reception if the completed line was consumed. */
+        /* Re-arm reception after the completed line has been consumed. */
         if (uart_line_ready == 0)
         {
             HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);

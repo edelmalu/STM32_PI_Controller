@@ -21,15 +21,16 @@ DEFAULT_KP = 0.08
 DEFAULT_KI = 5.0
 
 MAX_RPM = 1500.0
+# Zeitkonstante des Modells erster Ordnung; kleinere Werte beschreiben eine schnellere Strecke.
 PROCESS_TIME_CONSTANT = 0.5
 SETPOINT_RPM = 1200.0
 
 DISTURBANCE_TIME = 5.0
-DISTURBANCE_MODE = "pulse"  # "off", "pulse" oder "persistent"
+DISTURBANCE_MODE = "off"  # "off", "pulse" oder "persistent"
+DISTURBANCE_RPM = 10.0
 DISTURBANCE_DURATION = 0.1  # Wird nur im pulse-Modus verwendet
-DISTURBANCE_LEVELS = (200.0, 100.0, 50.0, 25.0, 10.0)
 
-RESULTS_DIRECTORY = Path(__file__).resolve().parent / "results/integral/10.0"
+RESULTS_DIRECTORY = Path(__file__).resolve().parent / "results"
 
 
 def save_run_metadata(path, metadata):
@@ -65,8 +66,8 @@ def send_command_and_wait_for_ack(stm32, command, expected_prefix, timeout_s=5.0
         if response.startswith("ERR,"):
             raise RuntimeError(f"STM32 hat den Befehl abgelehnt: {response}")
 
-        # Nach dem Reset kann zuerst eine mitten im UART-Telegramm beginnende
-        # Zeile eintreffen; außerdem sendet die Firmware regelmäßig Timerdaten.
+        # Nach dem Reset können unvollständige UART-Zeilen oder Timertelegramme
+        # vor der angeforderten Bestätigung eintreffen.
         discarded_lines += 1
         last_response = response
 
@@ -169,6 +170,7 @@ def create_plot(run_directory, times, setpoints, measurements,
 
     plot_path = run_directory / "plot.png"
     figure.savefig(plot_path, dpi=150)
+    plt.show()
     plt.close(figure)
     return plot_path
 
@@ -468,7 +470,8 @@ def run_simulation(run_directory, kp_value, ki_value, disturbance_mode,
                     "ascii", errors="replace"
                 ).strip()
 
-            # Vor der Bestätigung können noch alte oder angeschnittene Timerzeilen ankommen.
+            # Vor der Bestätigung können noch unvollständige oder ältere
+            # UART-Zeilen sowie Timertelegramme eintreffen.
             response = send_command_and_wait_for_ack(
                 stm32,
                 f"SET_PI,{kp_value:.6f},{ki_value:.6f}",
@@ -482,7 +485,8 @@ def run_simulation(run_directory, kp_value, ki_value, disturbance_mode,
             start = time.monotonic()
             stm32.write(f"MEAS,{measured_value:.2f}\n".encode("ascii"))
 
-            # Jede CSV-Zeile sofort schreiben, damit Daten bei Abbruch erhalten bleiben.
+            # CSV-Zeilen werden fortlaufend geschrieben und geflusht, damit
+            # bereits erfasste Messwerte bei einem Abbruch erhalten bleiben.
             with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
                 csv_writer = csv.writer(csv_file)
                 csv_writer.writerow(
@@ -500,7 +504,8 @@ def run_simulation(run_directory, kp_value, ki_value, disturbance_mode,
                 )
                 csv_file.flush()
 
-                # TIM2 sendet nach jeder 10-ms-Reglerberechnung einen Reglerwert.
+                # Die Firmware überträgt den Reglerwert mit TIM2-Zählerstand
+                # und, sofern verfügbar, der gemessenen Timerperiode.
                 while len(measurements) < SIMULATION_STEPS:
                     response = stm32.readline().decode(
                         "ascii", errors="replace"
@@ -550,7 +555,8 @@ def run_simulation(run_directory, kp_value, ki_value, disturbance_mode,
                         disturbance_rpm if disturbance_is_active else 0.0
                     )
 
-                    # u ist normiert; MAX_RPM skaliert ihn auf den virtuellen Prozesswert.
+                    # Die normierte Stellgröße wird auf den virtuellen
+                    # Prozesswert skaliert.
                     target_value = MAX_RPM * controller_output
                     effective_target = max(
                         0.0,
@@ -649,32 +655,28 @@ def main():
     kp_value = prompt_gain("kp", DEFAULT_KP)
     ki_value = prompt_gain("ki", DEFAULT_KI)
 
-    batch_started_at = datetime.now().astimezone()
-    batch_id = batch_started_at.strftime("%Y%m%d_%H%M%S_%f")
-    batch_directory = RESULTS_DIRECTORY / f"batch_{batch_id}"
-    batch_directory.mkdir(parents=True, exist_ok=False)
+    run_started_at = datetime.now().astimezone()
+    run_id = run_started_at.strftime("%Y%m%d_%H%M%S_%f")
+    if DISTURBANCE_MODE == "off":
+        run_name = f"off_{run_id}"
+    else:
+        run_name = f"{DISTURBANCE_MODE}_{DISTURBANCE_RPM:g}_{run_id}"
+    run_directory = RESULTS_DIRECTORY / run_name
 
     print(
-        f"\nStarte Versuchsreihe: Modus={DISTURBANCE_MODE}, "
-        f"kp={kp_value:g}, ki={ki_value:g}"
+        f"\nStarte Einzelmessung: Modus={DISTURBANCE_MODE}, "
+        f"Störung={DISTURBANCE_RPM:g}, kp={kp_value:g}, ki={ki_value:g}"
     )
-    for index, disturbance_rpm in enumerate(DISTURBANCE_LEVELS, start=1):
-        run_name = f"{DISTURBANCE_MODE}_{disturbance_rpm:g}"
-        run_directory = batch_directory / run_name
-        print(
-            f"\n=== Lauf {run_name} ({index}/{len(DISTURBANCE_LEVELS)}) ==="
-        )
-        run_simulation(
-            run_directory,
-            kp_value,
-            ki_value,
-            DISTURBANCE_MODE,
-            disturbance_rpm,
-        )
-
-    print(f"\nVersuchsreihe abgeschlossen: {batch_directory}")
+    run_simulation(
+        run_directory,
+        kp_value,
+        ki_value,
+        DISTURBANCE_MODE,
+        DISTURBANCE_RPM,
+    )
 
 
-# Beim Import werden nur Konfiguration und Funktionen geladen, nicht der COM-Port geöffnet.
+# Beim Import werden Funktionen und Konfiguration geladen. Die serielle
+# Verbindung wird nur beim direkten Programmstart geöffnet.
 if __name__ == "__main__":
     main()
