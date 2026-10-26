@@ -22,8 +22,8 @@ Störgrößenunterdrückung und reproduzierbare Messergebnisse.
     geschlossenen Regelkreis verbinden.
 -   Das Führungsverhalten und die Reaktion auf konfigurierbare
     Laststörungen bewerten.
--   Messwerte und Zeitinformationen aufzeichnen, damit Versuche
-    nachvollziehbar und vergleichbar sind.
+-   Messwerte und Zeitinformationen speichern, damit Versuche
+    nachvollziehbar und vergleichbar ausgewertet werden können.
 
 ## Systemübersicht
 
@@ -104,35 +104,27 @@ virtuelle Strecke und keinen realen Motor.
 Die Simulation unterstützt drei Störungsmodi, die in `main.py`
 konfiguriert werden:
 
-  -----------------------------------------------------------------------
-###  Modus                               Verhalten
-  ----------------------------------- -----------------------------------
-  `off`                               Keine Laststörung
-
-  `pulse`                             Eine zeitlich begrenzte Störung ab
-                                      dem konfigurierten Störzeitpunkt
-
-  `persistent`                        Eine dauerhafte Störung ab dem
-                                      konfigurierten Störzeitpunkt
-  -----------------------------------------------------------------------
+| Modus | Verhalten |
+|---|---|
+| `off` | Keine Laststörung |
+| `pulse` | Zeitlich begrenzte Störung ab dem konfigurierten Störzeitpunkt |
+| `persistent` | Dauerhafte Störung ab dem konfigurierten Störzeitpunkt |
 
 Wichtige Einstellungen in `main.py`:
 
 ``` python
-DISTURBANCE_MODE = "persistent"  # "off", "pulse" oder "persistent"
+DISTURBANCE_MODE = "off"  # "off", "pulse" oder "persistent"
 DISTURBANCE_TIME = 5.0
+DISTURBANCE_RPM = 10.0
 DISTURBANCE_DURATION = 0.1
-DISTURBANCE_LEVELS = (200.0, 100.0, 50.0, 25.0, 10.0)
 ```
 
-`DISTURBANCE_MODE` wird vor dem Start ausgewählt. Das Skript durchläuft
-anschließend automatisch die fünf Werte aus `DISTURBANCE_LEVELS`.
-Bei `pulse` gilt die konfigurierte Dauer für alle fünf Störungshöhen;
-bei `persistent` bleibt jede Störung ab dem Störzeitpunkt bis zum
-Simulationsende aktiv. Bei `off` wird ebenfalls eine fünfteilige Reihe
-ausgeführt, aber keine Störung auf die Strecke angewendet. In diesem
-Modus kennzeichnen die Zahlen in den Laufordnernamen nur die jeweilige
-Position in der Reihe.
+Pro Programmstart wird eine Einzelmessung ausgeführt. Bei `pulse` wird
+die konfigurierte Amplitude für die angegebene Dauer angewendet; bei
+`persistent` bleibt sie ab dem Störzeitpunkt bis zum Simulationsende
+aktiv. Bei `off` wird keine Störung angewendet. Für die dokumentierte
+Störuntersuchung wurde eine Amplitude von 200 U/min verwendet; dazu
+`DISTURBANCE_RPM = 200.0` setzen und den gewünschten Modus wählen.
 
 Die Störung wird im virtuellen Streckenmodell als Drehzahl-Offset auf
 den effektiven Zielwert modelliert. Das ist ein vereinfachter
@@ -142,9 +134,9 @@ drehmomentbasiertes Motor- oder mechanisches Lastmodell.
 ## Messdaten und erzeugte Ergebnisse
 
 Jeder Start der Anwendung erzeugt unter dem konfigurierten
-`RESULTS_DIRECTORY` einen Ordner. Darin erhält
-jeder der fünf Läufe einen eigenen Ordner, zum Beispiel
-`persistent_200` oder `pulse_25`. Die Anwendung speichert je Lauf:
+`RESULTS_DIRECTORY` einen eigenen, zeitgestempelten Laufordner, zum
+Beispiel `persistent_200_<Zeitstempel>`, `pulse_200_<Zeitstempel>` oder
+`off_<Zeitstempel>`. Die Anwendung speichert je Lauf:
 
 -   **`measurements.csv`** --- Zeitreihendaten wie Simulationszeit,
     vergangene PC-Zeit, TIM2-Zählerstand, Messwert, Sollwert,
@@ -177,18 +169,16 @@ STM32_PI_Controller/
 ├── python/
 │   ├── main.py
 │   └── results/
-│       └── proportional/
-│           └── 0.16/
-│               └── <Modus>_<Störungshöhe>/
-│                   ├── measurements.csv
-│                   ├── run.json
-│                   └── plot.png
+│       └── <Modus>_<Störungshöhe>_<Zeitstempel>/
+│           ├── measurements.csv
+│           ├── run.json
+│           └── plot.png
 └── README.md
 ```
 
-Der Beispielpfad `results/proportional/0.16/` entspricht dem aktuell in
-`main.py` eingestellten `RESULTS_DIRECTORY`. Passe diesen Wert an, wenn
-du Ergebnisse an einem anderen Ort ablegen möchtest.
+Bei `off` entfällt die Störungshöhe im Ordnernamen. `RESULTS_DIRECTORY`
+ist in `main.py` auf `python/results/` gesetzt und kann bei Bedarf
+angepasst werden.
 
 `main.c` und die übrigen STM32-Projektdateien werden im
 STM32CubeIDE-Projekt verwaltet. Damit das Repository unabhängig
@@ -229,15 +219,16 @@ SETPOINT_RPM = 1200.0
 
 DISTURBANCE_MODE = "off"  # "off", "pulse" oder "persistent"
 DISTURBANCE_TIME = 5.0
+DISTURBANCE_RPM = 200.0  # Amplitude der dokumentierten Störversuche
 DISTURBANCE_DURATION = 0.1
-DISTURBANCE_LEVELS = (200.0, 100.0, 50.0, 25.0, 10.0)
 ```
 
-Die gezeigten Werte entsprechen den Standardwerten in der
-bereitgestellten `main.py`. Passe sie an den jeweiligen Versuch an. Beim
-Start fragt das Skript `kp` und `ki` einmal ab; durch Drücken der
-Eingabetaste werden die konfigurierten Standardwerte übernommen. Diese
-Werte gelten für alle fünf Läufe des Batches.
+Port, Streckenparameter und Modus sind vor dem Lauf in `main.py`
+einzustellen. Für die dokumentierten Störversuche wird
+`DISTURBANCE_RPM = 200.0` verwendet; der Standardwert in der
+bereitgestellten Datei kann davon abweichen. Beim Start fragt das Skript
+`kp` und `ki` ab; durch Drücken der Eingabetaste werden die in `main.py`
+konfigurierten Standardwerte übernommen.
 
 ### 4. Versuch starten
 
@@ -249,11 +240,10 @@ python main.py
 ```
 
 Das Skript überträgt die Reglerverstärkungen und den Sollwert, empfängt
-die STM32-Telemetrie, aktualisiert die virtuelle Strecke anhand des
+die STM32-Telemetrie und aktualisiert die virtuelle Strecke anhand des
 gemeldeten Timerintervalls (sofern DWT-Daten verfügbar sind; andernfalls
-wird `DT` verwendet) und arbeitet die fünf Störungshöhen nacheinander ab.
-CSV, JSON und Plot werden je Lauf gespeichert; Plot-Fenster werden nicht
-geöffnet.
+wird `DT` verwendet). CSV, JSON und Plot werden für diese Einzelmessung
+gespeichert; der Plot wird anschließend angezeigt.
 
 ## Ergebnisse interpretieren
 
@@ -272,10 +262,12 @@ Eine sinnvolle Versuchsreihe ist:
     Sollwert, Streckenparameter und Störungseinstellungen unverändert
     lassen.
 
-Ändere jeweils nur eine Variable und bewahre die erzeugten
-Batch-Ordner auf. Innerhalb eines Batches bleiben `kp`, `ki` und der
-Störungsmodus gleich; die Störungshöhe wird automatisch variiert. So
-lassen sich die Auswirkungen der Änderungen nachvollziehbar vergleichen.
+Für einen Vergleich mit Störungshöhe 200 U/min bleiben Streckenparameter,
+Sollwert, Störmodus und Störhöhe gleich; geändert wird jeweils nur eine
+Reglerverstärkung. Jeder Lauf wird separat gespeichert. Eine ausführliche
+Auswertung der Dauer- und Impulsstörung sowie des Kp-Vergleichs ist in
+[Technische Auswertung](<Technische Auswertung des PI-Regelkrei.md>)
+dokumentiert.
 
 ## Aktuelle Einschränkungen
 
@@ -303,8 +295,8 @@ lassen sich die Auswirkungen der Änderungen nachvollziehbar vergleichen.
 
 ## Mögliche nächste Schritte
 
--   Automatisierten Vergleich mehrerer `kp`-/`ki`-Kombinationen ergänzen;
-    die Störungshöhen werden bereits automatisch durchlaufen.
+-   Stationäre Schwankungsbreite und Erholzeit nach einer Störung als
+    zusätzliche Kennwerte automatisiert auswerten.
 -   Das Streckenmodell anhand von Messdaten eines realen Motors und
     Encoders validieren.
 -   Ein drehmoment- und lastbasiertes Motormodell einführen.

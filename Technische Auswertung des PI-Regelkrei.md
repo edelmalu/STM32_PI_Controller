@@ -36,7 +36,9 @@ $$
 
 auf.
 
-Die Python-Strecke aktualisiert sich pro empfangenem Timer-Telegramm. Wenn das Telegramm einen gültigen Wert für die Timerperiode enthält, wird der Timestamp um diesen Wert erhört.
+Die Python-Strecke aktualisiert sich pro empfangenem Timer-Telegramm.
+Wenn das Telegramm einen gültigen Wert für die Timerperiode enthält,
+wird die Simulationszeit um diese gemessene Periode erhöht.
 
 ## 3. Virtuelle Regelstrecke
 
@@ -576,43 +578,126 @@ Die berechneten Pole beschreiben die lokale Dynamik ohne Sättigung und ohne zus
 
 ## 7. Vergleich mit gespeicherten Läufen
 
-Die folgenden stationären Spitze-Spitze-Werte wurden laut vorliegender Auswertung aus den CSV-Zeitreihen im Fenster von 10 bis 12 s berechnet. Alle aufgeführten Läufe verwenden $\tau=0{,}5$ s, den Sollwert 1200 U/min und den Modus `off`. Die konfigurierte Laststörung war damit ausgeschaltet.
+Die ausgewerteten Störversuche verwenden eine Amplitude von 200 U/min.
+Untersucht werden ein dauerhafter Sprung ab 5 s und ein 0,1-s-Impuls ab
+5 s. Für den Vergleich der Reglerparameter bleibt die Störhöhe
+unverändert; variiert wird jeweils nur eine Reglerverstärkung.
 
-| Versuch | $K_p$ | $K_i$ | Modellprognose am Arbeitspunkt | Istwert-Spitze-Spitze 10–12 s |
-|---|---:|---:|---|---:|
-| Basis | 0,08 | 5 | lokal stabil | 0,00 U/min |
-| Ki niedrig | 0,08 | 2,5 | lokal instabil, untere Stabilitätsbedingung verletzt | 6,44 U/min |
-| Ki hoch | 0,08 | 10 | lokal instabil, obere Stabilitätsbedingung verletzt | 12,24 U/min |
-| Kp niedrig | 0,04 | 5 | lokal instabil, obere Stabilitätsbedingung verletzt | 14,61 U/min |
-| Kp hoch | 0,16 | 5 | kein stabiler $K_i$-Bereich für dieses $K_p$ | 21,72 U/min |
+### 7.1 Dauerstörung mit $K_p=0{,}08$ und $K_p=0{,}16$
 
-Die Tabelle stellt die Vorhersage des vereinfachten linearen Modells den berichteten Kennwerten aus den gespeicherten Läufen gegenüber. Die Kennwerte sind mit der Modellprognose vereinbar, stellen für sich allein aber keinen vollständigen Beweis für die Ursache der beobachteten Schwankungen dar.
+Die folgende Gegenüberstellung verwendet in beiden Läufen
+$K_i=5$, $\tau=0{,}5$ s, einen Sollwert von 1200 U/min und dieselbe
+dauerhafte Störung von 200 U/min. Damit ist $K_p$ die einzige geänderte
+Reglergröße.
 
-Der Basislauf erreichte laut gespeicherter Auswertung eine Einschwingzeit von ungefähr 0,76 s und ein maximales Überschwingen von etwa 3,11 U/min. Die stationäre Abweichung im letzten 2-s-Fenster war laut Auswertung praktisch null. Die Spitze-Spitze-Schwankung wurde dort mit 0,00 U/min angegeben. Dieser Wert bedeutet, dass innerhalb der gespeicherten und ausgewerteten Auflösung keine Schwankung festgestellt wurde; er beweist keine mathematisch exakt konstante Drehzahl.
+<table>
+<tr>
+<th>Basis: Kp = 0,08, Ki = 5</th>
+<th>Erhöhtes Kp: Kp = 0,16, Ki = 5</th>
+</tr>
+<tr>
+<td><img src="python/results/default/persistent_200/plot.png" alt="Dauerstörung 200 U/min mit Kp 0,08 und Ki 5" width="100%"></td>
+<td><img src="python/results/proportional/0.16/persistent_200/plot.png" alt="Dauerstörung 200 U/min mit Kp 0,16 und Ki 5" width="100%"></td>
+</tr>
+</table>
 
-Die außerhalb des lokalen Stabilitätsbereichs liegenden Parameterkombinationen zeigen in den ausgewerteten Zeitreihen weiterhin Schwankungen. Das ist mit der linearen Instabilitätsprognose vereinbar. Im vollständigen System verhindern jedoch die Stellgrößen- und Integratorbegrenzungen ein unbegrenztes Anwachsen der Zustände. Dadurch kann sich ein begrenzter, anhaltender Schwingungsverlauf einstellen.
+Beim Basisregler ist nach der Störung eine kurze Abweichung erkennbar;
+danach liegt der Istwert nahe beim Sollwert. Beim Lauf mit
+$K_p=0{,}16$ ist bereits vor dem Störzeitpunkt eine deutlich größere
+periodische Schwankung sichtbar, die nach dem Störsprung fortbesteht.
+Die Störung verstärkt somit die Abweichung kurzfristig, ist aber nicht
+der alleinige Ursprung dieser Schwingung.
 
-Die Kennwerte **Einschwingzeit** und **Überschwingen** reichen allein nicht aus, um solche Verläufe zu bewerten. Im gespeicherten Kp-hoch-Lauf liegt die angegebene Spitze-Spitze-Schwankung mit rund 21,72 U/min beispielsweise innerhalb des Toleranzbands von ±2 % des Sollwerts:
+| $K_p$ | $K_i$ | Istwert-Bereich 4,5–6,5 s | Spitze-Spitze 10–12 s | Stellgröße 4,5–6,5 s |
+|---:|---:|---:|---:|---:|
+| 0,08 | 5 | 1195,98–1201,86 U/min | 0,019 U/min | 0,7989–1,0000 |
+| 0,16 | 5 | 1185,03–1205,49 U/min | 7,447 U/min | 0,1216–1,0000 |
+
+Beim Basisregler steigt die Stellgröße nach dem Störsprung
+vorübergehend bis zur oberen Grenze 1. Im letzten 2-s-Fenster liegt
+sie bei ungefähr 0,933. Das entspricht der stationären Bilanz:
 
 $$
-0{,}02\cdot1200=24\,\mathrm{U/min}
+u^*=\frac{r+d}{K}
+=\frac{1200+200}{1500}
+\approx0{,}933
 $$
 
-Eine kurze Einschwingzeit kann daher ausgewiesen werden, obwohl im stationären Zeitfenster noch eine erkennbare Schwankung besteht. Für künftige Vergleiche sollte zusätzlich die stationäre Spitze-Spitze-Amplitude oder Standardabweichung ausgewertet werden.
+Der Sollwert bleibt damit rechnerisch erreichbar, der Arbeitspunkt
+liegt aber näher an der Stellgrößengrenze als ohne Störung.
 
-### Beispielhafte gespeicherte Dateien
+### 7.2 Einfluss von $K_i$ bei derselben Dauerstörung
 
-- [Basislauf: run.json](python/results/default/default_kp_0.08_ki_5.0/run.json) und [measurements.csv](python/results/default/default_kp_0.08_ki_5.0/measurements.csv)
-- [Ki 2,5: run.json](python/results/integral/2.5/ki_2.5/run.json) und [measurements.csv](python/results/integral/2.5/ki_2.5/measurements.csv)
-- [Ki 10: run.json](python/results/integral/10.0/ki_10.0/run.json) und [measurements.csv](python/results/integral/10.0/ki_10.0/measurements.csv)
-- [Kp 0,04: run.json](python/results/proportional/0.04/kp_0.04/run.json) und [measurements.csv](python/results/proportional/0.04/kp_0.04/measurements.csv)
-- [Kp 0,16: run.json](python/results/proportional/0.16/kp_0.16/run.json) und [measurements.csv](python/results/proportional/0.16/kp_0.16/measurements.csv)
+Bei festem $K_p=0{,}08$ und gleicher dauerhafter Störung von
+200 U/min wurden drei Integralverstärkungen verglichen:
+
+| $K_i$ | Stabilitätsanalyse am Arbeitspunkt | Spitze-Spitze 10–12 s |
+|---:|---|---:|
+| 2,5 | außerhalb des berechneten lokalen Stabilitätsbereichs | 2,152 U/min |
+| 5 | innerhalb des berechneten lokalen Stabilitätsbereichs | 0,019 U/min |
+| 10 | außerhalb des berechneten lokalen Stabilitätsbereichs | 4,197 U/min |
+
+Die nichtlineare Simulation muss nicht die unbegrenzt anwachsende
+Antwort des linearen Modells zeigen. Anti-Windup, Integrator-Clamp und
+Stellgrößenbegrenzung verändern den Verlauf. Die Messwerte sind daher
+Ergebnisse des vollständigen Simulationskreises; die Polanalyse liefert
+eine lokale lineare Einordnung.
+
+### 7.3 Impulsstörung mit Amplitude 200 U/min
+
+Beim 0,1-s-Impuls mit dem Basisregler ($K_p=0{,}08$, $K_i=5$) liegt
+der Istwert im Zeitfenster 4,5–6,5 s zwischen 1196,00 und 1204,01 U/min.
+Die Stellgröße reicht in diesem Fenster von 0,6127 bis 1,0. Im
+Zeitfenster 10–12 s beträgt die Istwert-Spitze-Spitze-Schwankung rund
+0,033 U/min; die Antwort klingt im vorliegenden Lauf nach dem Impuls
+weitgehend ab.
+
+![Antwort auf einen 0,1-s-Impuls mit 200 U/min bei Kp 0,08 und Ki 5](python/results/default/pulse_200/plot.png)
+
+Wegen des diskreten 10-ms-Rasters wird ein Impuls von 0,1 s als
+ungefähr 9 bis 10 aktive Messschritte abgebildet. Die genaue Zahl hängt
+von der Lage des Start- und Endzeitpunkts relativ zu den
+Simulationsschritten ab.
+
+### 7.4 Kennwerte und Interpretation
+
+Die gespeicherte `settling_time_s` wird ab dem anfänglichen
+Sollwertsprung berechnet. Sie beschreibt **nicht** die Erholzeit nach
+dem Störzeitpunkt bei 5 s. Für die Störantwort sind deshalb die
+Zeitreihen nach 5 s und die stationäre Spitze-Spitze-Schwankung im
+Fenster 10–12 s aussagekräftiger. Die CSV enthält die begrenzte
+Stellgröße, nicht den internen unbeschränkten PI-Ausgang.
+
+Die dargestellten Werte stammen aus einzelnen gespeicherten Läufen.
+Wiederholungen wären erforderlich, um eine Streuung zwischen Läufen
+quantitativ zu bewerten.
+
+### Gespeicherte Datensätze
+
+- [Dauerstörung, Basisregler: Plot](python/results/default/persistent_200/plot.png),
+  [run.json](python/results/default/persistent_200/run.json) und
+  [measurements.csv](python/results/default/persistent_200/measurements.csv)
+- [Dauerstörung, $K_p=0{,}16$: Plot](python/results/proportional/0.16/persistent_200/plot.png),
+  [run.json](python/results/proportional/0.16/persistent_200/run.json) und
+  [measurements.csv](python/results/proportional/0.16/persistent_200/measurements.csv)
+- [Impulsstörung, Basisregler: Plot](python/results/default/pulse_200/plot.png),
+  [run.json](python/results/default/pulse_200/run.json) und
+  [measurements.csv](python/results/default/pulse_200/measurements.csv)
 
 ## 8. Woher kommen die sägezahnartigen Verläufe?
 
-Die gespeicherten Daten zeigen Schwankungen auch bei ausgeschalteter Störung. Die konfigurierte Laststörung ist daher keine notwendige Voraussetzung für das Auftreten dieser Schwankungen.
+In den Messreihen mit einer Laststörung von 200 U/min zeigt der
+Basisregler eine kurze Störantwort und anschließend einen nahezu
+stationären Verlauf. Beim Vergleichslauf mit $K_p=0{,}16$ treten
+hingegen bereits vor der Störung deutliche Schwankungen auf; sie bleiben
+nach dem Störsprung bestehen. Die Laststörung ist für diese
+Schwingungen somit nicht die alleinige Ursache.
 
-Das Muster ist mit einer diskreten Regelschleife vereinbar, deren Parameter für die konkrete Abtastung und Streckendynamik ungünstig gewählt sind. Aus den Zeitreihen allein lässt sich jedoch nicht eindeutig bestimmen, welcher einzelne Mechanismus den Verlauf verursacht.
+Das Muster ist mit einer diskreten Regelschleife vereinbar, deren
+Parameter für die konkrete Abtastung und Streckendynamik ungünstig
+gewählt sind. Aus den Zeitreihen allein lässt sich jedoch nicht
+eindeutig bestimmen, welcher einzelne Mechanismus den Verlauf
+verursacht.
 
 ### 8.1 Große Wirkung schon bei kleinen Fehlern
 
@@ -662,11 +747,23 @@ Ein sägezahnartiger Verlauf von Stellgröße und Istwert ist mit einem solchen 
 
 Der an den STM32 gesendete Messwert wird auf zwei Nachkommastellen gerundet. Diese Auflösung entspricht bei der Drehzahlmessung einer Schrittweite von 0,01 U/min.
 
-Die berichteten stationären Spitze-Spitze-Schwankungen von rund 6 bis 22 U/min liegen deutlich darüber. Die Messwertauflösung allein erklärt daher nicht die Größenordnung dieser Schwankungen. Sie kann allerdings feinere Bewegungen und das Verhalten nahe einem stationären Zustand beeinflussen.
+Im $K_p=0{,}16$-Lauf beträgt die Spitze-Spitze-Schwankung im Zeitfenster
+10–12 s rund 7,45 U/min. Sie liegt deutlich über der
+Messwertschrittweite von 0,01 U/min. Die Messwertauflösung allein
+erklärt daher nicht die beobachtete Schwankung. Sie kann allerdings
+feinere Bewegungen und das Verhalten nahe einem stationären Zustand
+beeinflussen.
 
 ### 8.6 Zusammenfassende Einordnung
 
-Die vorliegenden Ergebnisse zeigen, dass die sägezahnartigen Verläufe nicht allein durch die konfigurierte Laststörung erklärt werden können. Die lokale Stabilitätsanalyse liefert eine plausible Erklärung dafür, weshalb bestimmte Parameterkombinationen ungünstiger reagieren als andere.
+Die vorliegenden Ergebnisse mit Störamplitude 200 U/min zeigen, dass
+der Verlauf von der Reglereinstellung abhängt. Der Basisregler
+$K_p=0{,}08,\;K_i=5$ erholt sich im persistenten Störversuch weitgehend,
+während der Vergleichslauf mit $K_p=0{,}16,\;K_i=5$ stärkere
+Schwankungen zeigt. Da diese bereits vor dem Störzeitpunkt auftreten,
+lassen sie sich nicht allein durch den Lastsprung erklären. Die lokale
+Stabilitätsanalyse liefert eine modellbasierte Einordnung dieses
+Unterschieds.
 
 Die genaue Ursache des vollständigen zeitlichen Verlaufs kann jedoch nicht ausschließlich aus den berechneten Polen abgeleitet werden. Für eine eindeutige Zuordnung wären insbesondere die synchronisierten Zeitreihen von Stellgröße und Istwert sowie eine Messung der Ende-zu-Ende-Verzögerung hilfreich.
 
@@ -710,6 +807,14 @@ $$
 
 im berechneten lokalen Stabilitätsbereich des vereinfachten diskreten Modells. Dies stimmt mit dem berichteten ruhigen Basislauf überein.
 
+Bei den ausgewerteten Dauerstörversuchen mit 200 U/min lagen die
+stationären Spitze-Spitze-Schwankungen im Fenster 10–12 s bei
+0,019 U/min für den Basisregler, 2,152 U/min für $K_i=2{,}5$,
+4,197 U/min für $K_i=10$, 4,867 U/min für $K_p=0{,}04$ und
+7,447 U/min für $K_p=0{,}16$. Diese Werte stammen jeweils aus einem
+einzelnen Lauf und sollten nicht als statistische Streuungsanalyse
+verstanden werden.
+
 Die untersuchten Kombinationen
 
 $$
@@ -724,7 +829,7 @@ $$
 K_p=0{,}04,\qquad K_i=5
 $$
 
-liegen nach dem vereinfachten diskreten Modell außerhalb des stabilen Bereichs. Für $K_p=0{,}16$ existiert unter den getroffenen Annahmen kein stabiler Bereich für $K_i$. Die ausgewerteten CSV-Kennwerte zeigen bei diesen Kombinationen anhaltende stationäre Schwankungen.
+liegen nach dem vereinfachten diskreten Modell außerhalb des stabilen Bereichs. Für $K_p=0{,}16$ existiert unter den getroffenen Annahmen kein stabiler Bereich für $K_i$. Die ausgewerteten CSV-Kennwerte der 200-U/min-Dauerstörversuche zeigen bei diesen Kombinationen größere stationäre Schwankungen als beim Basisregler.
 
 Die Ergebnisse verdeutlichen den Unterschied zwischen einem kontinuierlichen PI-Modell und einer tatsächlich diskret aktualisierten Regelung. Abtastzeit, Streckendynamik, Reglerparameter, Rückführungsverzögerung und Begrenzungen beeinflussen gemeinsam das Verhalten des geschlossenen Kreises.
 
